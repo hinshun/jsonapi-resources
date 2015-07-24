@@ -8,7 +8,7 @@ module JSONAPI
                   :include_directives, :params
 
     def initialize(params = nil, options = {})
-      @params = params
+      @params = ActionController::Parameters.new(params)
       @context = options[:context]
       @key_formatter = options.fetch(:key_formatter, JSONAPI.configuration.key_formatter)
       @errors = []
@@ -20,7 +20,6 @@ module JSONAPI
       @source_id = nil
       @include_directives = nil
       @paginator = nil
-      @id = nil
 
       setup_action(@params)
     end
@@ -75,7 +74,6 @@ module JSONAPI
     def setup_show_action(params)
       parse_fields(params[:fields])
       parse_include_directives(params[:include])
-      @id = params[:id]
       add_show_operation
     end
 
@@ -261,55 +259,23 @@ module JSONAPI
     end
 
     def add_find_operation
-      @operations.push JSONAPI::FindOperation.new(
-        @resource_klass,
-        context: @context,
-        filters: @filters,
-        include_directives: @include_directives,
-        sort_criteria: @sort_criteria,
-        paginator: @paginator
-      )
+      @operations.push JSONAPI::FindOperation.new(self)
     end
 
     def add_show_operation
-      @operations.push JSONAPI::ShowOperation.new(
-        @resource_klass,
-        context: @context,
-        id: @id,
-        include_directives: @include_directives
-      )
+      @operations.push JSONAPI::ShowOperation.new(self)
     end
 
     def add_show_relationship_operation(relationship_type, parent_key)
-      @operations.push JSONAPI::ShowRelationshipOperation.new(
-        @resource_klass,
-        context: @context,
-        relationship_type: relationship_type,
-        parent_key: @resource_klass.verify_key(parent_key)
-      )
+      @operations.push JSONAPI::ShowRelationshipOperation.new(self)
     end
 
     def add_show_related_resource_operation(relationship_type)
-      @operations.push JSONAPI::ShowRelatedResourceOperation.new(
-        @resource_klass,
-        context: @context,
-        relationship_type: relationship_type,
-        source_klass: @source_klass,
-        source_id: @source_id
-      )
+      @operations.push JSONAPI::ShowRelatedResourceOperation.new(self)
     end
 
     def add_show_related_resources_operation(relationship_type)
-      @operations.push JSONAPI::ShowRelatedResourcesOperation.new(
-        @resource_klass,
-        context: @context,
-        relationship_type: relationship_type,
-        source_klass: @source_klass,
-        source_id: @source_id,
-        filters: @source_klass.verify_filters(@filters, @context),
-        sort_criteria: @sort_criteria,
-        paginator: @paginator
-      )
+      @operations.push JSONAPI::ShowRelatedResourcesOperation.new(self)
     end
 
     # TODO: Please remove after `createable_fields` is removed
@@ -328,11 +294,7 @@ module JSONAPI
         verify_type(params[:type])
 
         data = parse_params(params, creatable_fields)
-        @operations.push JSONAPI::CreateResourceOperation.new(
-          @resource_klass,
-          context: @context,
-          data: data
-        )
+        @operations.push JSONAPI::CreateResourceOperation.new(self, data)
       end
     rescue JSONAPI::Exceptions::Error => e
       @errors.concat(e.errors)
@@ -509,11 +471,8 @@ module JSONAPI
         verified_param_set = parse_params(object_params, updatable_fields)
 
         @operations.push JSONAPI::CreateToManyRelationshipOperation.new(
-          resource_klass,
-          context: @context,
-          resource_id: parent_key,
-          relationship_type: relationship_type,
-          data: verified_param_set[:to_many].values[0]
+          self,
+          verified_param_set[:to_many].values[0]
         )
       end
     end
@@ -526,23 +485,17 @@ module JSONAPI
           verified_param_set = parse_params(object_params, updatable_fields)
 
           @operations.push JSONAPI::ReplacePolymorphicToOneRelationshipOperation.new(
-                             resource_klass,
-                             context: @context,
-                             resource_id: parent_key,
-                             relationship_type: relationship_type,
-                             key_value: verified_param_set[:to_one].values[0][:id],
-                             key_type: verified_param_set[:to_one].values[0][:type]
+                             self,
+                             verified_param_set[:to_one].values[0][:id],
+                             verified_param_set[:to_one].values[0][:type]
                            )
         else
           object_params = { relationships: { format_key(relationship.name) => { data: data } } }
           verified_param_set = parse_params(object_params, updatable_fields)
 
           @operations.push JSONAPI::ReplaceToOneRelationshipOperation.new(
-                             resource_klass,
-                             context: @context,
-                             resource_id: parent_key,
-                             relationship_type: relationship_type,
-                             key_value: verified_param_set[:to_one].values[0]
+                             self,
+                             verified_param_set[:to_one].values[0]
                            )
         end
       elsif relationship.is_a?(JSONAPI::Relationship::ToMany)
@@ -554,11 +507,8 @@ module JSONAPI
         verified_param_set = parse_params(object_params, updatable_fields)
 
         @operations.push JSONAPI::ReplaceToManyRelationshipOperation.new(
-                           resource_klass,
-                           context: @context,
-                           resource_id: parent_key,
-                           relationship_type: relationship_type,
-                           data: verified_param_set[:to_many].values[0]
+                           self,
+                           verified_param_set[:to_many].values[0]
                          )
       end
     end
@@ -581,10 +531,9 @@ module JSONAPI
       verify_type(data[:type])
 
       @operations.push JSONAPI::ReplaceFieldsOperation.new(
-        @resource_klass,
-        context: @context,
-        resource_id: key,
-        data: parse_params(data, updatable_fields)
+        self,
+        key,
+        parse_params(data, updatable_fields)
       )
     end
 
@@ -607,11 +556,7 @@ module JSONAPI
       keys = parse_key_array(params.permit(:id)[:id])
 
       keys.each do |key|
-        @operations.push JSONAPI::RemoveResourceOperation.new(
-          @resource_klass,
-          context: @context,
-          resource_id: key
-        )
+        @operations.push JSONAPI::RemoveResourceOperation.new(self, key)
       end
     rescue ActionController::UnpermittedParameters => e
       @errors.concat(JSONAPI::Exceptions::ParametersNotAllowed.new(e.params).errors)
@@ -622,27 +567,14 @@ module JSONAPI
     def parse_remove_relationship_operation(params)
       relationship_type = params[:relationship]
 
-      parent_key = params[resource_klass._as_parent_key]
-
       relationship = resource_klass._relationship(relationship_type)
       if relationship.is_a?(JSONAPI::Relationship::ToMany)
         keys = parse_key_array(params[:keys])
         keys.each do |key|
-          @operations.push JSONAPI::RemoveToManyRelationshipOperation.new(
-            resource_klass,
-            context: @context,
-            resource_id: parent_key,
-            relationship_type: relationship_type,
-            associated_key: key
-          )
+          @operations.push JSONAPI::RemoveToManyRelationshipOperation.new(self, key)
         end
       else
-        @operations.push JSONAPI::RemoveToOneRelationshipOperation.new(
-          resource_klass,
-          context: @context,
-          resource_id: parent_key,
-          relationship_type: relationship_type
-        )
+        @operations.push JSONAPI::RemoveToOneRelationshipOperation.new(self)
       end
     end
 

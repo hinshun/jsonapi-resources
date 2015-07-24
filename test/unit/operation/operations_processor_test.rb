@@ -63,11 +63,13 @@ class OperationsProcessorTest < Minitest::Test
 
     count = Planet.count
 
-    operations = [
-      JSONAPI::CreateResourceOperation.new(PlanetResource, data: {attributes: {'name' => 'earth', 'description' => 'The best planet ever.'}})
-    ]
 
     request = JSONAPI::Request.new
+    request.resource_klass = PlanetResource
+    operations = [
+      JSONAPI::CreateResourceOperation.new(request, {attributes: {'name' => 'earth', 'description' => 'The best planet ever.'}})
+    ]
+
     request.operations = operations
 
     operation_results = op.process(request)
@@ -83,13 +85,14 @@ class OperationsProcessorTest < Minitest::Test
 
     count = Planet.count
 
+    request = JSONAPI::Request.new
+    request.resource_klass = PlanetResource
     operations = [
-      JSONAPI::CreateResourceOperation.new(PlanetResource, data: {attributes: {'name' => 'earth', 'description' => 'The best planet for life.'}}),
-      JSONAPI::CreateResourceOperation.new(PlanetResource, data: {attributes: {'name' => 'mars', 'description' => 'The red planet.'}}),
-      JSONAPI::CreateResourceOperation.new(PlanetResource, data: {attributes: {'name' => 'venus', 'description' => 'A very hot planet.'}})
+      JSONAPI::CreateResourceOperation.new(request, {attributes: {'name' => 'earth', 'description' => 'The best planet for life.'}}),
+      JSONAPI::CreateResourceOperation.new(request, {attributes: {'name' => 'mars', 'description' => 'The red planet.'}}),
+      JSONAPI::CreateResourceOperation.new(request, {attributes: {'name' => 'venus', 'description' => 'A very hot planet.'}})
     ]
 
-    request = JSONAPI::Request.new
     request.operations = operations
 
     operation_results = op.process(request)
@@ -107,18 +110,19 @@ class OperationsProcessorTest < Minitest::Test
     planetoid = PlanetType.find(2)
     assert_equal(saturn.planet_type_id, planetoid.id)
 
+    request = JSONAPI::Request.new({
+      planet_id: saturn.id,
+      relationship: :planet_type
+    })
+    request.resource_klass = PlanetResource
+
     operations = [
       JSONAPI::ReplaceToOneRelationshipOperation.new(
-        PlanetResource,
-        {
-          resource_id: saturn.id,
-          relationship_type: :planet_type,
-          key_value: gas_giant.id
-        }
+        request,
+        gas_giant.id
       )
     ]
 
-    request = JSONAPI::Request.new
     request.operations = operations
 
     operation_results = op.process(request)
@@ -131,18 +135,19 @@ class OperationsProcessorTest < Minitest::Test
     assert_equal(saturn.planet_type_id, gas_giant.id)
 
     # Remove link
+    request = JSONAPI::Request.new({
+      planet_id: saturn.id,
+      relationship: :planet_type
+    })
+    request.resource_klass = PlanetResource
+
     operations = [
       JSONAPI::ReplaceToOneRelationshipOperation.new(
-        PlanetResource,
-        {
-          resource_id: saturn.id,
-          relationship_type: :planet_type,
-          key_value: nil
-        }
+        request,
+        nil
       )
     ]
 
-    request = JSONAPI::Request.new
     request.operations = operations
 
     op.process(request)
@@ -150,18 +155,18 @@ class OperationsProcessorTest < Minitest::Test
     assert_equal(saturn.planet_type_id, nil)
 
     # Reset
+    request = JSONAPI::Request.new({
+      planet_id: saturn.id,
+      relationship: :planet_type
+    })
+    request.resource_klass = PlanetResource
     operations = [
       JSONAPI::ReplaceToOneRelationshipOperation.new(
-        PlanetResource,
-        {
-          resource_id: saturn.id,
-          relationship_type: :planet_type,
-          key_value: 5
-        }
+        request,
+        5
       )
     ]
 
-    request = JSONAPI::Request.new
     request.operations = operations
 
     op.process(request)
@@ -184,18 +189,19 @@ class OperationsProcessorTest < Minitest::Test
     betay.save!
     betaz.save!
 
+    request = JSONAPI::Request.new({
+      planet_type_id: gas_giant.id,
+      relationship: :planets
+    })
+    request.resource_klass = PlanetTypeResource
+
     operations = [
       JSONAPI::CreateToManyRelationshipOperation.new(
-        PlanetTypeResource,
-        {
-          resource_id: gas_giant.id,
-          relationship_type: :planets,
-          data: [betax.id, betay.id, betaz.id]
-        }
+        request,
+        [betax.id, betay.id, betaz.id]
       )
     ]
 
-    request = JSONAPI::Request.new
     request.operations = operations
 
     op.process(request)
@@ -232,18 +238,19 @@ class OperationsProcessorTest < Minitest::Test
     betay.save!
     betaz.save!
 
+    request = JSONAPI::Request.new({
+      planet_type_id: gas_giant.id,
+      relationship: :planets
+    })
+    request.resource_klass = PlanetTypeResource
+
     operations = [
       JSONAPI::ReplaceToManyRelationshipOperation.new(
-        PlanetTypeResource,
-        {
-          resource_id: gas_giant.id,
-          relationship_type: :planets,
-          data: [betax.id, betay.id, betaz.id]
-        }
+        request,
+        [betax.id, betay.id, betaz.id]
       )
     ]
 
-    request = JSONAPI::Request.new
     request.operations = operations
 
     op.process(request)
@@ -272,17 +279,17 @@ class OperationsProcessorTest < Minitest::Test
     saturn = Planet.find(1)
     assert_equal(saturn.name, 'Satern')
 
+    request = JSONAPI::Request.new
+    request.resource_klass = PlanetResource
+
     operations = [
       JSONAPI::ReplaceFieldsOperation.new(
-        PlanetResource,
-        {
-          resource_id: 1,
-          data: {attributes: {'name' => 'saturn'}}
-        }
+        request,
+        1,
+        {attributes: {'name' => 'saturn'}}
       )
     ]
 
-    request = JSONAPI::Request.new
     request.operations = operations
 
     operation_results = op.process(request)
@@ -307,11 +314,13 @@ class OperationsProcessorTest < Minitest::Test
     makemake = Planet.find(2)
     assert_equal(makemake.name, 'Makemake')
 
+    request = JSONAPI::Request.new
+    request.resource_klass = PlanetResource
+
     operations = [
-      JSONAPI::RemoveResourceOperation.new(PlanetResource, resource_id: 2),
+      JSONAPI::RemoveResourceOperation.new(request, 2)
     ]
 
-    request = JSONAPI::Request.new
     request.operations = operations
 
     operation_results = op.process(request)
@@ -329,13 +338,15 @@ class OperationsProcessorTest < Minitest::Test
 
     count = Planet.count
 
+    request = JSONAPI::Request.new
+    request.resource_klass = PlanetResource
+
     operations = [
-      JSONAPI::RemoveResourceOperation.new(PlanetResource, resource_id: 3),
-      JSONAPI::RemoveResourceOperation.new(PlanetResource, resource_id: 4),
-      JSONAPI::RemoveResourceOperation.new(PlanetResource, resource_id: 4)
+      JSONAPI::RemoveResourceOperation.new(request, 3),
+      JSONAPI::RemoveResourceOperation.new(request, 4),
+      JSONAPI::RemoveResourceOperation.new(request, 4)
     ]
 
-    request = JSONAPI::Request.new
     request.operations = operations
 
     operation_results = op.process(request)
@@ -355,11 +366,13 @@ class OperationsProcessorTest < Minitest::Test
   def test_show_operation
     op = JSONAPI::OperationsProcessor.new
 
+    request = JSONAPI::Request.new({ id: '1' })
+    request.resource_klass = PlanetResource
+
     operations = [
-      JSONAPI::ShowOperation.new(PlanetResource, {id: '1'})
+      JSONAPI::ShowOperation.new(request)
     ]
 
-    request = JSONAPI::Request.new
     request.operations = operations
 
     operation_results = op.process(request)
@@ -372,11 +385,13 @@ class OperationsProcessorTest < Minitest::Test
   def test_show_operation_error
     op = JSONAPI::OperationsProcessor.new
 
+    request = JSONAPI::Request.new({ id: '145' })
+    request.resource_klass = PlanetResource
+
     operations = [
-      JSONAPI::ShowOperation.new(PlanetResource, {id: '145'})
+      JSONAPI::ShowOperation.new(request)
     ]
 
-    request = JSONAPI::Request.new
     request.operations = operations
 
     operation_results = op.process(request)
@@ -389,11 +404,16 @@ class OperationsProcessorTest < Minitest::Test
   def test_show_relationship_operation
     op = JSONAPI::OperationsProcessor.new
 
+    request = JSONAPI::Request.new({
+      planet_id: '1',
+      relationship: :planet_type
+    })
+    request.resource_klass = PlanetResource
+
     operations = [
-      JSONAPI::ShowRelationshipOperation.new(PlanetResource, {parent_key: '1', relationship_type: :planet_type})
+      JSONAPI::ShowRelationshipOperation.new(request)
     ]
 
-    request = JSONAPI::Request.new
     request.operations = operations
 
     operation_results = op.process(request)
@@ -406,11 +426,16 @@ class OperationsProcessorTest < Minitest::Test
   def test_show_relationship_operation_error
     op = JSONAPI::OperationsProcessor.new
 
+    request = JSONAPI::Request.new({
+      planet_id: '145',
+      relationship: :planet_type
+    })
+    request.resource_klass = PlanetResource
+
     operations = [
-      JSONAPI::ShowRelationshipOperation.new(PlanetResource, {parent_key: '145', relationship_type: :planet_type})
+      JSONAPI::ShowRelationshipOperation.new(request)
     ]
 
-    request = JSONAPI::Request.new
     request.operations = operations
 
     operation_results = op.process(request)
@@ -423,15 +448,15 @@ class OperationsProcessorTest < Minitest::Test
   def test_show_related_resource_operation
     op = JSONAPI::OperationsProcessor.new
 
+    request = JSONAPI::Request.new({ relationship: :planet_type })
+    request.resource_klass = PlanetResource
+    request.source_klass = PlanetResource
+    request.source_id = '1'
+
     operations = [
-      JSONAPI::ShowRelatedResourceOperation.new(PlanetResource,
-                                                {
-                                                  source_klass: PlanetResource,
-                                                  source_id: '1',
-                                                  relationship_type: :planet_type})
+      JSONAPI::ShowRelatedResourceOperation.new(request)
     ]
 
-    request = JSONAPI::Request.new
     request.operations = operations
 
     operation_results = op.process(request)
@@ -444,15 +469,15 @@ class OperationsProcessorTest < Minitest::Test
   def test_show_related_resource_operation_error
     op = JSONAPI::OperationsProcessor.new
 
+    request = JSONAPI::Request.new({ relationship: :planet_type })
+    request.resource_klass = PlanetResource
+    request.source_klass = PlanetResource
+    request.source_id = '145'
+
     operations = [
-      JSONAPI::ShowRelatedResourceOperation.new(PlanetResource,
-                                                {
-                                                  source_klass: PlanetResource,
-                                                  source_id: '145',
-                                                  relationship_type: :planet_type})
+      JSONAPI::ShowRelatedResourceOperation.new(request)
     ]
 
-    request = JSONAPI::Request.new
     request.operations = operations
 
     operation_results = op.process(request)
@@ -465,15 +490,15 @@ class OperationsProcessorTest < Minitest::Test
   def test_show_related_resources_operation
     op = JSONAPI::OperationsProcessor.new
 
+    request = JSONAPI::Request.new({ relationship: :moons })
+    request.resource_klass = PlanetResource
+    request.source_klass = PlanetResource
+    request.source_id = '1'
+
     operations = [
-      JSONAPI::ShowRelatedResourcesOperation.new(PlanetResource,
-                                                {
-                                                  source_klass: PlanetResource,
-                                                  source_id: '1',
-                                                  relationship_type: :moons})
+      JSONAPI::ShowRelatedResourcesOperation.new(request)
     ]
 
-    request = JSONAPI::Request.new
     request.operations = operations
 
     operation_results = op.process(request)
@@ -486,15 +511,15 @@ class OperationsProcessorTest < Minitest::Test
   def test_show_related_resources_operation_error
     op = JSONAPI::OperationsProcessor.new
 
+    request = JSONAPI::Request.new({ relationship: :moons })
+    request.resource_klass = PlanetResource
+    request.source_klass = PlanetResource
+    request.source_id = '145'
+
     operations = [
-      JSONAPI::ShowRelatedResourcesOperation.new(PlanetResource,
-                                                {
-                                                  source_klass: PlanetResource,
-                                                  source_id: '145',
-                                                  relationship_type: :moons})
+      JSONAPI::ShowRelatedResourcesOperation.new(request)
     ]
 
-    request = JSONAPI::Request.new
     request.operations = operations
 
     operation_results = op.process(request)

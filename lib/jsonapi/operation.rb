@@ -2,10 +2,9 @@ module JSONAPI
   class Operation
     attr_reader :resource_klass, :options, :transactional
 
-    def initialize(resource_klass, options = {})
-      @context = options[:context]
-      @resource_klass = resource_klass
-      @options = options
+    def initialize(request)
+      @context = request.context
+      @resource_klass = request.resource_klass
       @transactional = true
     end
 
@@ -16,13 +15,13 @@ module JSONAPI
   class FindOperation < Operation
     attr_reader :filters, :include_directives, :sort_criteria, :paginator
 
-    def initialize(resource_klass, options = {})
-      @filters = options[:filters]
-      @include_directives = options[:include_directives]
-      @sort_criteria = options.fetch(:sort_criteria, [])
-      @paginator = options[:paginator]
+    def initialize(request)
+      @filters = request.filters
+      @include_directives = request.include_directives
+      @sort_criteria = request.sort_criteria || []
+      @paginator = request.paginator
       @transactional = false
-      super(resource_klass, options)
+      super(request)
     end
 
     def record_count
@@ -69,11 +68,11 @@ module JSONAPI
   class ShowOperation < Operation
     attr_reader :id, :include_directives
 
-    def initialize(resource_klass, options = {})
-      @id = options.fetch(:id)
-      @include_directives = options[:include_directives]
+    def initialize(request)
+      @id = request.params[:id]
+      @include_directives = request.include_directives
       @transactional = false
-      super(resource_klass, options)
+      super(request)
     end
 
     def apply
@@ -93,11 +92,12 @@ module JSONAPI
   class ShowRelationshipOperation < Operation
     attr_reader :parent_key, :relationship_type
 
-    def initialize(resource_klass, options = {})
-      @parent_key = options.fetch(:parent_key)
-      @relationship_type = options.fetch(:relationship_type)
+    def initialize(request)
+      parent_key = request.params.require(request.resource_klass._as_parent_key)
+      @parent_key = request.resource_klass.verify_key(parent_key)
+      @relationship_type = request.params[:relationship]
       @transactional = false
-      super(resource_klass, options)
+      super(request)
     end
 
     def apply
@@ -115,12 +115,12 @@ module JSONAPI
   class ShowRelatedResourceOperation < Operation
     attr_reader :source_klass, :source_id, :relationship_type
 
-    def initialize(resource_klass, options = {})
-      @source_klass = options.fetch(:source_klass)
-      @source_id = options.fetch(:source_id)
-      @relationship_type = options.fetch(:relationship_type)
+    def initialize(request)
+      @source_klass = request.source_klass
+      @source_id = request.source_id
+      @relationship_type = request.params[:relationship]
       @transactional = false
-      super(resource_klass, options)
+      super(request)
     end
 
     def apply
@@ -138,15 +138,15 @@ module JSONAPI
   class ShowRelatedResourcesOperation < Operation
     attr_reader :source_klass, :source_id, :relationship_type, :filters, :sort_criteria, :paginator
 
-    def initialize(resource_klass, options = {})
-      @source_klass = options.fetch(:source_klass)
-      @source_id = options.fetch(:source_id)
-      @relationship_type = options.fetch(:relationship_type)
-      @filters = options[:filters]
-      @sort_criteria = options[:sort_criteria]
-      @paginator = options[:paginator]
+    def initialize(request)
+      @source_klass = request.source_klass
+      @source_id = request.source_id
+      @relationship_type = request.params[:relationship]
+      @filters = request.source_klass.verify_filters(request.filters, request.context)
+      @sort_criteria = request.sort_criteria
+      @paginator = request.paginator
       @transactional = false
-      super(resource_klass, options)
+      super(request)
     end
 
     def apply
@@ -167,9 +167,9 @@ module JSONAPI
   class CreateResourceOperation < Operation
     attr_reader :data
 
-    def initialize(resource_klass, options = {})
-      @data = options.fetch(:data)
-      super(resource_klass, options)
+    def initialize(request, data)
+      @data = data
+      super(request)
     end
 
     def apply
@@ -185,9 +185,9 @@ module JSONAPI
 
   class RemoveResourceOperation < Operation
     attr_reader :resource_id
-    def initialize(resource_klass, options = {})
-      @resource_id = options.fetch(:resource_id)
-      super(resource_klass, options)
+    def initialize(request, resource_id)
+      @resource_id = resource_id
+      super(request)
     end
 
     def apply
@@ -204,10 +204,10 @@ module JSONAPI
   class ReplaceFieldsOperation < Operation
     attr_reader :data, :resource_id
 
-    def initialize(resource_klass, options = {})
-      @resource_id = options.fetch(:resource_id)
-      @data = options.fetch(:data)
-      super(resource_klass, options)
+    def initialize(request, resource_id, data)
+      @resource_id = resource_id
+      @data = data
+      super(request)
     end
 
     def apply
@@ -221,11 +221,11 @@ module JSONAPI
   class ReplaceToOneRelationshipOperation < Operation
     attr_reader :resource_id, :relationship_type, :key_value
 
-    def initialize(resource_klass, options = {})
-      @resource_id = options.fetch(:resource_id)
-      @key_value = options.fetch(:key_value)
-      @relationship_type = options.fetch(:relationship_type).to_sym
-      super(resource_klass, options)
+    def initialize(request, key_value)
+      @resource_id = request.params.require(request.resource_klass._as_parent_key)
+      @key_value = key_value
+      @relationship_type = request.params.require(:relationship).to_sym
+      super(request)
     end
 
     def apply
@@ -239,12 +239,12 @@ module JSONAPI
   class ReplacePolymorphicToOneRelationshipOperation < Operation
     attr_reader :resource_id, :relationship_type, :key_value, :key_type
 
-    def initialize(resource_klass, options = {})
-      @resource_id = options.fetch(:resource_id)
-      @key_value = options.fetch(:key_value)
-      @key_type = options.fetch(:key_type)
-      @relationship_type = options.fetch(:relationship_type).to_sym
-      super(resource_klass, options)
+    def initialize(request, key_value, key_type)
+      @resource_id = request.params.require(request.resource_klass._as_parent_key)
+      @key_value = key_value
+      @key_type = key_type
+      @relationship_type = request.params.require(:relationship).to_sym
+      super(request)
     end
 
     def apply
@@ -258,11 +258,11 @@ module JSONAPI
   class CreateToManyRelationshipOperation < Operation
     attr_reader :resource_id, :relationship_type, :data
 
-    def initialize(resource_klass, options)
-      @resource_id = options.fetch(:resource_id)
-      @data = options.fetch(:data)
-      @relationship_type = options.fetch(:relationship_type).to_sym
-      super(resource_klass, options)
+    def initialize(request, data)
+      @resource_id = request.params.require(request.resource_klass._as_parent_key)
+      @data = data
+      @relationship_type = request.params.require(:relationship).to_sym
+      super(request)
     end
 
     def apply
@@ -276,11 +276,11 @@ module JSONAPI
   class ReplaceToManyRelationshipOperation < Operation
     attr_reader :resource_id, :relationship_type, :data
 
-    def initialize(resource_klass, options)
-      @resource_id = options.fetch(:resource_id)
-      @data = options.fetch(:data)
-      @relationship_type = options.fetch(:relationship_type).to_sym
-      super(resource_klass, options)
+    def initialize(request, data)
+      @resource_id = request.params.require(request.resource_klass._as_parent_key)
+      @data = data
+      @relationship_type = request.params.require(:relationship).to_sym
+      super(request)
     end
 
     def apply
@@ -294,11 +294,11 @@ module JSONAPI
   class RemoveToManyRelationshipOperation < Operation
     attr_reader :resource_id, :relationship_type, :associated_key
 
-    def initialize(resource_klass, options)
-      @resource_id = options.fetch(:resource_id)
-      @associated_key = options.fetch(:associated_key)
-      @relationship_type = options.fetch(:relationship_type).to_sym
-      super(resource_klass, options)
+    def initialize(request, associated_key)
+      @resource_id = request.params.require(request.resource_klass._as_parent_key)
+      @associated_key = associated_key
+      @relationship_type = request.params.require(:relationship).to_sym
+      super(request)
     end
 
     def apply
@@ -312,10 +312,10 @@ module JSONAPI
   class RemoveToOneRelationshipOperation < Operation
     attr_reader :resource_id, :relationship_type
 
-    def initialize(resource_klass, options)
-      @resource_id = options.fetch(:resource_id)
-      @relationship_type = options.fetch(:relationship_type).to_sym
-      super(resource_klass, options)
+    def initialize(request)
+      @resource_id = request.params.require(request.resource_klass._as_parent_key)
+      @relationship_type = request.params.require(:relationship).to_sym
+      super(request)
     end
 
     def apply

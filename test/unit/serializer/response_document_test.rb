@@ -18,12 +18,13 @@ class ResponseDocumentTest < ActionDispatch::IntegrationTest
   end
 
   def test_response_document
+    request = JSONAPI::Request.new
+    request.resource_klass = PlanetResource
     operations = [
-      JSONAPI::CreateResourceOperation.new(PlanetResource, data: {attributes: {'name' => 'Earth 2.0'}}),
-      JSONAPI::CreateResourceOperation.new(PlanetResource, data: {attributes: {'name' => 'Vulcan'}})
+      JSONAPI::CreateResourceOperation.new(request, {attributes: {'name' => 'Earth 2.0'}}),
+      JSONAPI::CreateResourceOperation.new(request, {attributes: {'name' => 'Vulcan'}})
     ]
 
-    request = JSONAPI::Request.new
     request.operations = operations
 
     op = BasicOperationsProcessor.new()
@@ -39,12 +40,18 @@ class ResponseDocumentTest < ActionDispatch::IntegrationTest
   end
 
   def test_response_document_multiple_find
+    request = JSONAPI::Request.new
+    request.resource_klass = PostResource
+    request.filters = { id: '1' }
+
+    other_request = request.dup
+    other_request.filters = { id: '2' }
+
     operations = [
-      JSONAPI::FindOperation.new(PostResource, filters: {id: '1'}),
-      JSONAPI::FindOperation.new(PostResource, filters: {id: '2'})
+      JSONAPI::FindOperation.new(request),
+      JSONAPI::FindOperation.new(other_request)
     ]
 
-    request = JSONAPI::Request.new
     request.operations = operations
 
     op = ActiveRecordOperationsProcessor.new()
